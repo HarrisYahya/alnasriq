@@ -1,20 +1,19 @@
 'use client';
+
 import { useEffect, useState, useRef } from 'react';
-import { supabase } from './lib/supabase';
+import Link from 'next/link';
 import { Patient, NewPatient } from './types';
 import PatientInput from './components/PatientInput';
 import PatientTable from './components/PatientTable';
 import ConfirmModal from './components/ConfirmModal';
 import UndoToast from './components/UndoToast';
-import Link from 'next/link';
-
 
 export default function Home() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletedBackup, setDeletedBackup] = useState<Patient[]>([]);
   const [singleDeleted, setSingleDeleted] = useState<Patient | null>(null);
-  const [countdown, setCountdown] = useState<number>(0);
+  const [countdown, setCountdown] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const undoTimerRef = useRef<number | null>(null);
@@ -27,72 +26,71 @@ export default function Home() {
     status: 'waiting',
   });
 
-  // === Fetch patients (last 24h only) ===
+  // === Fetch Patients ===
   const fetchPatients = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('patients')
-      .select('*')
-      .order('ticket', { ascending: true });
-
-    if (!error && data) {
-      const now = new Date();
-      const last24hPatients = (data as Patient[]).filter(p => {
-        const inserted = new Date((p as any).inserted_at); // inserted_at from DB
-        return now.getTime() - inserted.getTime() <= 24 * 60 * 60 * 1000;
-      });
-      setPatients(last24hPatients);
-    }
-
+    const res = await fetch('/api/patients/all');
+    const data = await res.json();
+    setPatients(data || []);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchPatients();
     return () => {
-      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
-      if (countdownRef.current) window.clearInterval(countdownRef.current);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
 
-  const getNextTicket = () => (patients.length === 0 ? 1 : Math.max(...patients.map(p => p.ticket)) + 1);
+  const getNextTicket = () =>
+    patients.length === 0 ? 1 : Math.max(...patients.map(p => p.ticket)) + 1;
 
-   // === Add patient ===
-const addPatient = async () => {
-  if (!newPatient.patient_name.trim()) return alert('Please enter a patient name.');
-  if (!newPatient.service.length) return alert('Please select at least one service.');
+  // === Add Patient ===
+  const addPatient = async () => {
+    if (!newPatient.patient_name.trim()) return alert('Please enter a patient name.');
+    if (!newPatient.service.length) return alert('Select at least one service.');
 
-  const ticketNumber = getNextTicket();
-  const patientToInsert = {
-    ...newPatient,
-    patient_name: newPatient.patient_name.trim(),
-    service: newPatient.service.join(','), // join array into string
-    ticket: ticketNumber,
-    status: 'pending', // updated to match interface
-    inserted_at: new Date().toISOString(), // timestamp
-  };
+    const ticket = getNextTicket();
+    await fetch('/api/patients/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newPatient,
+        service: newPatient.service.join(','),
+        ticket,
+        status: 'pending',
+      }),
+    });
 
-  await supabase.from('patients').insert([patientToInsert]);
-  setNewPatient({ patient_name: '', stage: 'Cusub', service: [], status: 'pending' }); // reset with correct status
-  fetchPatients();
-};
-
-  // === Toggle status ===
-  const toggleStatus = async (id: number, current: string) => {
-    await supabase
-      .from('patients')
-      .update({ status: current === 'waiting' ? 'done' : 'waiting' })
-      .eq('id', id);
+    setNewPatient({ patient_name: '', stage: 'Cusub', service: [], status: 'pending' });
     fetchPatients();
   };
 
-  // === Delete single patient + undo ===
+  // === Toggle Status ===
+  const toggleStatus = async (id: number, current: string) => {
+    const newStatus = current === 'waiting' ? 'done' : 'waiting';
+    await fetch('/api/patients/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: newStatus }),
+    });
+    fetchPatients();
+  };
+
+  // === Delete One ===
   const deletePatient = async (id: number) => {
     if (!confirm('Delete this patient?')) return;
-    const p = patients.find(p => p.id === id);
+    const p = patients.find(x => x.id === id);
     if (!p) return;
     setSingleDeleted(p);
-    await supabase.from('patients').delete().eq('id', id);
+
+    await fetch('/api/patients/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+
     fetchPatients();
     startUndoTimer(30, () => setSingleDeleted(null));
   };
@@ -100,32 +98,46 @@ const addPatient = async () => {
   const undoSingleDelete = async () => {
     if (!singleDeleted) return;
     const { id, ...rest } = singleDeleted;
-    await supabase.from('patients').insert([rest]);
+    await fetch('/api/patients/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rest),
+    });
     setSingleDeleted(null);
     clearTimers();
     fetchPatients();
   };
 
-  // === Delete all patients + undo ===
+  // === Delete All ===
   const deleteAllPatients = async () => {
     setConfirmOpen(false);
     if (!patients.length) return alert('No patients to delete.');
     setDeletedBackup(patients);
-    await supabase.from('patients').delete().neq('id', 0);
+    await fetch('/api/patients/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
     fetchPatients();
     startUndoTimer(600, () => setDeletedBackup([]));
   };
 
   const undoDeleteAll = async () => {
-    if (!deletedBackup.length) return alert('Nothing to undo.');
+    if (!deletedBackup.length) return;
     const restored = deletedBackup.map(({ id, ...rest }) => rest);
-    await supabase.from('patients').insert(restored);
+    for (const r of restored) {
+      await fetch('/api/patients/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(r),
+      });
+    }
     setDeletedBackup([]);
     clearTimers();
     fetchPatients();
   };
 
-  // === Undo timer helpers ===
+  // === Undo Timer ===
   const startUndoTimer = (seconds: number, onExpire: () => void) => {
     clearTimers();
     setCountdown(seconds);
@@ -165,12 +177,12 @@ const addPatient = async () => {
           >
             Delete All
           </button>
-             <Link
-              href="/components/all-patients"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition"
-            >
-              View All Patients
-            </Link>
+          <Link
+            href="/components/all-patients"
+            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition"
+          >
+            View All Patients
+          </Link>
         </div>
       </div>
 
