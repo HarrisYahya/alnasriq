@@ -56,7 +56,6 @@ export default function PatientInput({ newPatient, setNewPatient, addPatient }: 
         <option>Raajo</option>
         <option>Bedel</option>
         <option>Soolabtay</option>
-        <option>Cabasho</option>
       </select>
 
       {/* Service popup */}
