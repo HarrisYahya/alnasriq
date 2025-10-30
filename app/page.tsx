@@ -1,14 +1,39 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation'; // Needed for redirect
 import Link from 'next/link';
+import { supabase } from '@/lib/supabaseClient'; // Your Supabase client
 import { Patient, NewPatient } from './types';
 import PatientInput from './components/PatientInput';
 import PatientTable from './components/PatientTable';
 import ConfirmModal from './components/ConfirmModal';
 import UndoToast from './components/UndoToast';
+import Header from './components/Header';
+
 
 export default function Home() {
+  const router = useRouter();
+
+  // --- AUTH STATE ---
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+  const checkAuth = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      router.push('/login');
+    } else if (data.user.user_metadata?.role !== 'staff') {
+      router.push('/unauthorized'); // optional page
+    } else {
+      setAuthLoading(false);
+    }
+  };
+  checkAuth();
+}, [router]);
+
+
+  // --- YOUR ORIGINAL STATE ---
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletedBackup, setDeletedBackup] = useState<Patient[]>([]);
@@ -44,7 +69,7 @@ export default function Home() {
   }, []);
 
   const getNextTicket = () =>
-    patients.length === 0 ? 1 : Math.max(...patients.map(p => p.ticket)) + 1;
+    patients.length === 0 ? 1 : Math.max(...patients.map((p) => p.ticket)) + 1;
 
   // === Add Patient ===
   const addPatient = async () => {
@@ -81,7 +106,7 @@ export default function Home() {
   // === Delete One ===
   const deletePatient = async (id: number) => {
     if (!confirm('Delete this patient?')) return;
-    const p = patients.find(x => x.id === id);
+    const p = patients.find((x) => x.id === id);
     if (!p) return;
     setSingleDeleted(p);
 
@@ -146,7 +171,7 @@ export default function Home() {
       setCountdown(0);
     }, seconds * 1000);
     countdownRef.current = window.setInterval(() => {
-      setCountdown(c => (c <= 1 ? 0 : c - 1));
+      setCountdown((c) => (c <= 1 ? 0 : c - 1));
     }, 1000);
   };
 
@@ -158,55 +183,44 @@ export default function Home() {
   const formatSeconds = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-4 sm:p-8 flex flex-col items-center">
-      <div className="w-full max-w-6xl flex items-center justify-between mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-yellow-400">Alnasri Patient List</h1>
-        <div className="flex items-center gap-3">
-          {deletedBackup.length > 0 && (
-            <button
-              onClick={undoDeleteAll}
-              className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition"
-            >
-              Undo Delete ({formatSeconds(countdown)})
-            </button>
-          )}
-          <button
-            onClick={() => setConfirmOpen(true)}
-            className="bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 rounded-lg transition"
-          >
-            Delete All
-          </button>
-          <Link
-            href="/components/all-patients"
-            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition"
-          >
-            View All Patients
-          </Link>
-        </div>
-      </div>
+  // === Render Loading While Auth Check ===
+  if (authLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-black text-white">
+        <p className="animate-pulse text-lg">Checking authentication...</p>
+      </main>
+    );
+  }
 
-      <PatientInput newPatient={newPatient} setNewPatient={setNewPatient} addPatient={addPatient} />
-      <PatientTable
-        patients={patients}
-        loading={loading}
-        toggleStatus={toggleStatus}
-        deletePatient={deletePatient}
-      />
-      <ConfirmModal open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={deleteAllPatients} />
-      <UndoToast
-        deletedBackup={deletedBackup}
-        singleDeleted={singleDeleted}
-        countdown={countdown}
-        formatSeconds={formatSeconds}
-        undoDeleteAll={undoDeleteAll}
-        undoSingleDelete={undoSingleDelete}
-        clearUndo={() => {
-          setDeletedBackup([]);
-          setSingleDeleted(null);
-          setCountdown(0);
-        }}
-      />
-    </main>
+  // === Main Page ===
+  return (
+     
+    <main className="flex flex-col items-center w-full p-4 sm:p-8">
+  {/* Remove this old header */}
+  {/* <div className="w-full max-w-6xl flex items-center justify-between mb-6"> ... </div> */}
+
+  <PatientInput newPatient={newPatient} setNewPatient={setNewPatient} addPatient={addPatient} />
+  <PatientTable
+    patients={patients}
+    loading={loading}
+    toggleStatus={toggleStatus}
+    deletePatient={deletePatient}
+  />
+  <ConfirmModal open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={deleteAllPatients} />
+  <UndoToast
+    deletedBackup={deletedBackup}
+    singleDeleted={singleDeleted}
+    countdown={countdown}
+    formatSeconds={formatSeconds}
+    undoDeleteAll={undoDeleteAll}
+    undoSingleDelete={undoSingleDelete}
+    clearUndo={() => {
+      setDeletedBackup([]);
+      setSingleDeleted(null);
+      setCountdown(0);
+    }}
+  />
+</main>
+
   );
 }

@@ -9,8 +9,10 @@ export async function GET() {
       .order('ticket', { ascending: true });
 
     if (error) throw error;
+
     return NextResponse.json(data);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error: any) {
+    console.error('API /patients error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
