@@ -55,7 +55,7 @@ export default function PatientInput({ newPatient, setNewPatient, addPatient }: 
         <option>7 malin</option>
         <option>Raajo</option>
         <option>Bedel</option>
-        <option>Soolabtay</option>
+        <option>Solabtay</option>
         <option>Cabasho</option>
         
       </select>
