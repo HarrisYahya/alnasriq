@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation'; // Needed for redirect
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient'; // Your Supabase client
+import { supabase } from '@/lib/supabaseClient'; // Your Supabase clients
 import { Patient, NewPatient } from './types';
 import PatientInput from './components/PatientInput';
 import PatientTable from './components/PatientTable';
