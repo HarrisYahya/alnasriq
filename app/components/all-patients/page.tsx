@@ -24,14 +24,17 @@ export default function AllPatients() {
     fetchPatients();
   }, []);
 
-  // Filter patients
-  const filteredPatients = patients.filter(p =>
-    p.patient_name.toLowerCase().includes(search.toLowerCase()) ||
-    String(p.ticket).includes(search) ||
-    p.stage.toLowerCase().includes(search.toLowerCase()) ||
-    p.service.toLowerCase().includes(search.toLowerCase()) ||
-    p.status.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter patients (FIXED)
+  const filteredPatients = patients.filter(p => {
+    const searchLower = search.toLowerCase();
+    return (
+      (p.patient_name ?? '').toLowerCase().includes(searchLower) ||
+      String(p.ticket ?? '').includes(search) ||
+      (p.stage ?? '').toLowerCase().includes(searchLower) ||
+      (p.service ?? '').toLowerCase().includes(searchLower) ||
+      (p.status ?? '').toLowerCase().includes(searchLower)
+    );
+  });
 
   // Group by date
   const groupedByDate: Record<string, Patient[]> = {};
